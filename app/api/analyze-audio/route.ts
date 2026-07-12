@@ -1,83 +1,73 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
-// Define the schema for structured pronunciation feedback
+// Define the exact schema for structured pronunciation feedback conforming to SavedSession
 const PronunciationSchema = {
   type: Type.OBJECT,
   properties: {
-    overallScore: { type: Type.INTEGER, description: "A balanced overall score from 0 to 100 based on pronunciation, fluency, and pacing." },
-    scoresBreakdown: {
+    detectedLanguage: { type: Type.STRING, description: "Primary spoken language detected in the audio (e.g. 'English', 'Spanish', 'Hindi', etc.)." },
+    overallScore: { type: Type.INTEGER, description: "Overall balanced pronunciation score from 0 to 100." },
+    clarity: { type: Type.INTEGER, description: "Accuracy of individual phonemes, vowels, and consonants (0-100)." },
+    fluency: { type: Type.INTEGER, description: "Speech flow, smoothness, natural pausing, and absence of excessive hesitation (0-100)." },
+    pacing: { type: Type.INTEGER, description: "Tempo, speech rate (110-150 WPM range), and appropriate rhythm (0-100)." },
+    stress: { type: Type.INTEGER, description: "Syllable emphasis correctness and natural rhythmic intonation (0-100)." },
+    transcript: { type: Type.STRING, description: "The exact sequential word-for-word transcript of the speaker." },
+    feedback: {
       type: Type.OBJECT,
       properties: {
-        clarity: { type: Type.INTEGER, description: "Accuracy of individual phonemes, vowels, and consonants (0-100)." },
-        fluency: { type: Type.INTEGER, description: "Speech flow, smoothness, hesitations, and ease of understanding (0-100)." },
-        pacing: { type: Type.INTEGER, description: "Tempo, speech rate, and appropriate word stress (0-100)." }
-      },
-      required: ["clarity", "fluency", "pacing"]
-    },
-    transcriptWords: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          word: { type: Type.STRING, description: "The literal transcribed word in sequence." },
-          isCorrect: { type: Type.BOOLEAN, description: "True if pronounced clearly, false if mispronounced, heavily slurred, or unclear." },
-          expectedPhonetic: { type: Type.STRING, description: "ONLY include for incorrect words (isCorrect=false). Standard IPA helper (e.g. /wɜːkt/). Leave this field completely out of the object if isCorrect is true." },
-          errorExplanation: { type: Type.STRING, description: "ONLY include for incorrect words (isCorrect=false). Extremely brief 1-sentence linguistic explanation. Leave this field completely out of the object if isCorrect is true." },
-          improvementDrill: { type: Type.STRING, description: "ONLY include for incorrect words (isCorrect=false). Extremely brief 1-sentence physical adjustment tip. Leave this field completely out of the object if isCorrect is true." }
+        words: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              score: { type: Type.INTEGER, description: "Individual word accuracy score from 0 to 100." },
+              phonemes: { type: Type.STRING, description: "IPA phonetic spelling helper (e.g. /wɜːkt/)." },
+              errorType: { type: Type.STRING, description: "'mispronounced', 'omitted', 'inserted', or 'none'." },
+              explanation: { type: Type.STRING, description: "Brief 1-sentence explanation of the phonetic issue or accuracy." },
+              actionableAdvice: { type: Type.STRING, description: "Brief physical mechanics tip (e.g. tongue/lip placement)." },
+            },
+            required: ["word", "score", "errorType", "explanation"],
+          },
         },
-        required: ["word", "isCorrect"]
-      }
-    },
-    generalRecommendations: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING, description: "Short title of the targeted drill (e.g., 'Final Consonant Release')." },
-          problemDescription: { type: Type.STRING, description: "Very brief description of the core acoustic issue (max 1 sentence)." },
-          exerciseInstructions: { type: Type.STRING, description: "Very brief step-by-step instructions to practice (max 2 short sentences)." }
+        generalAdvice: { type: Type.STRING, description: "Concise overall coaching guidance." },
+        intelligibilityExplanation: { type: Type.STRING, description: "Overall speech intelligibility assessment across standard English contexts." },
+        keyStrengths: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "List of vocal strengths detected."
         },
-        required: ["title", "problemDescription", "exerciseInstructions"]
-      }
-    },
-    metadata: {
-      type: Type.OBJECT,
-      properties: {
-        durationSeconds: { type: Type.INTEGER, description: "Determined duration of the speech stream in seconds." },
-        detectedLanguage: { type: Type.STRING, description: "The primary language detected (should be 'English')." },
-        totalWords: { type: Type.INTEGER, description: "Count of total words parsed." },
-        unclearWordsCount: { type: Type.INTEGER, description: "Count of mispronounced or unclear words." }
+        focusAreas: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: "List of specific phonetic areas to focus on improving."
+        },
       },
-      required: ["durationSeconds", "detectedLanguage", "totalWords", "unclearWordsCount"]
-    }
+      required: ["words", "generalAdvice", "intelligibilityExplanation", "keyStrengths", "focusAreas"],
+    },
   },
-  required: ["overallScore", "scoresBreakdown", "transcriptWords", "generalRecommendations", "metadata"]
+  required: ["detectedLanguage", "overallScore", "clarity", "fluency", "pacing", "stress", "transcript", "feedback"],
 };
 
 // System Prompt for Speech Coaching
-const SYSTEM_INSTRUCTION = `You are an expert Applied Phonetician, English Pronunciation Coach, and experienced oral examiner for international language assessments (such as IELTS and PTE).
-Your task is to analyze the provided English spoken audio recording and return a detailed, professional pronunciation assessment.
+const SYSTEM_INSTRUCTION = `You are an expert Applied Phonetician, English Pronunciation Coach, and oral examiner for international language assessments (such as IELTS/PTE).
+Your task is to analyze the provided speech recording directly from the waveform and return a detailed pronunciation assessment conforming strictly to the JSON response schema.
 
-You must follow these strict grading and coaching rules:
-1. ACCENT TOLERANCE: Be highly tolerant of standard regional and international accents (such as Indian English, Spanish-accented English, East Asian accents, French English, etc.). Do NOT penalize or label standard accented phonology as "incorrect" or "mispronounced" if the spoken speech is clearly intelligible, grammatically aligned, and flows reasonably. Only flag actual mistakes that hinder intelligibility.
-2. GENUINE PHONETIC ISSUES TO FLAG:
-   - Severe phonetic omissions (e.g., omitting final consonants like the /t/ in "worked", /d/ in "played", /s/ in "paths").
-   - Vowel confusion that changes the word's semantic meaning or severely reduces clarity (e.g., pronouncing "sheep" like "ship" in a confusing context).
-   - Word stress placement errors (e.g., placing stress on the wrong syllable of "record" or "determine").
-   - Unclear slurring or speech-blending that results in unintelligible phrasing.
+Strict Grading and Coaching Rules:
+1. DETECT LANGUAGE: First identify the primary language spoken in the audio ('detectedLanguage'). If the audio is not spoken in English, clearly state the detected language (e.g. 'Spanish', 'Hindi', 'French') in 'detectedLanguage'.
+2. ACCENT TOLERANCE: Be highly tolerant of standard regional and international accents (such as Indian English, Spanish-accented English, East Asian accents, etc.). Do NOT penalize standard accented phonology if the speech is clearly intelligible and grammatically aligned. Only flag genuine acoustic deviations that hinder clarity.
 3. SCORING CRITERIA (0 to 100):
-   - Clarity: Accuracy of individual phonemes (0-100).
-   - Fluency: Smoothness, natural pausing, and absence of excessive hesitation (0-100).
-   - Pacing: The tempo of speech (normal is 110-150 WPM) and appropriate rhythmic stress (0-100).
-   - Overall Score: A calculated average of the three, weighted for practical clarity.
-4. TRANSCRIPT GENERATION AND LATENCY OPTIMIZATION:
-   - Transcribe every single spoken word sequentially.
-   - For EACH word, set 'isCorrect' to true if it was spoken clearly and understandably.
-   - IMPORTANT LATENCY LIMIT: To prevent server timeouts, you MUST completely omit 'expectedPhonetic', 'errorExplanation', and 'improvementDrill' fields for any correct words (where isCorrect is true). Do NOT include these fields with empty strings, null, or placeholder values—leave them completely undefined and out of the word's object.
-   - If a word was mispronounced, omitted, or slurred, set 'isCorrect' to false, and provide 'expectedPhonetic' (e.g. "/wɜːkt/"), an extremely concise 'errorExplanation' (max 10 words), and a highly direct physical 'improvementDrill' (max 10 words).
-5. EXERCISES & RECOMMENDATIONS:
-   - Generate exactly 2-3 specific, physical pronunciation drills tailored directly to the types of errors found. Keep titles, problem descriptions, and instructions extremely brief and concise (at most 1 sentence each) to minimize response latency.`;
+   - clarity: Accuracy of individual phonemes (0-100).
+   - fluency: Smoothness, continuity, and absence of long hesitations (0-100).
+   - pacing: Cadence and tempo (ideal is 110-150 WPM) (0-100).
+   - stress: Word stress placement and intonation (0-100).
+   - overallScore: Balanced weighted score out of 100.
+4. TRANSCRIPT & WORD BREAKDOWN:
+   - Transcribe every spoken word sequentially in 'transcript'.
+   - For EACH word in 'feedback.words', rate its individual 'score' (0-100).
+   - If a word was mispronounced, omitted, or slurred (<85 score), provide its IPA 'phonemes' (e.g. "/wɜːkt/"), set 'errorType' ("mispronounced", "omitted", or "inserted"), a concise 1-sentence 'explanation', and direct physical 'actionableAdvice' (e.g., "Press tongue tip against roof of mouth for /t/").
+   - For correct words (score >= 85), set 'errorType' to "none", and keep explanation/actionableAdvice brief or optional.
+5. SUMMARY ADVICE: Provide insightful 'generalAdvice', 'intelligibilityExplanation', 2-3 'keyStrengths', and 2-3 'focusAreas'.`;
 
 // Lazy initialization of Gemini API Client
 let aiClient: GoogleGenAI | null = null;
@@ -114,7 +104,6 @@ async function generateContentWithRetry(
       lastError = err;
       const errMsg = err?.message || String(err);
       
-      // Classify error as transient if it is a 503, 429, or specifically mentions high demand/temporary spikes
       const isTransient = 
         errMsg.includes("503") ||
         errMsg.includes("UNAVAILABLE") ||
@@ -131,7 +120,6 @@ async function generateContentWithRetry(
         throw err;
       }
 
-      // Exponential backoff with random jitter (+/- 20%)
       const delay = initialDelayMs * Math.pow(2, attempt - 1) * (0.8 + Math.random() * 0.4);
       console.warn(`Gemini API returned transient error (Attempt ${attempt}/${maxTries}): ${errMsg}. Retrying in ${Math.round(delay)}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delay));
@@ -142,39 +130,78 @@ async function generateContentWithRetry(
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("audio") as File | null;
-    const consent = formData.get("consentGiven") as string | null;
+    let audioBase64 = "";
+    let fileName = "recording.wav";
+    let duration: number | undefined;
+    let mimeType = "audio/wav";
 
-    if (consent !== "true") {
-      return NextResponse.json(
-        { error: "Consent required. Under India's Digital Personal Data Protection Act (DPDP), 2023, you must explicitly consent before processing your voice recording." },
-        { status: 400 }
-      );
+    const contentType = req.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      audioBase64 = body.audioBase64 || "";
+      fileName = body.fileName || "recording.wav";
+      duration = typeof body.duration === "number" ? body.duration : (body.duration ? Number(body.duration) : undefined);
+    } else {
+      const formData = await req.formData();
+      const file = formData.get("audio") as File | null;
+      const consent = formData.get("consentGiven") as string | null;
+
+      if (consent === "false") {
+        return NextResponse.json(
+          { error: "Consent required. Under India's Digital Personal Data Protection Act (DPDP), 2023, you must explicitly consent before processing your voice recording." },
+          { status: 400 }
+        );
+      }
+
+      if (!file) {
+        return NextResponse.json(
+          { error: "No audio recording file was provided." },
+          { status: 400 }
+        );
+      }
+
+      if (file.size > 32 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: "The selected file exceeds the maximum allowed size of 32MB." },
+          { status: 400 }
+        );
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      audioBase64 = Buffer.from(arrayBuffer).toString("base64");
+      fileName = file.name || "recording.wav";
+      const durParam = formData.get("duration");
+      duration = durParam ? Number(durParam) : undefined;
+      mimeType = file.type || "audio/webm";
     }
 
-    if (!file) {
-      return NextResponse.json(
-        { error: "No audio recording file was provided." },
-        { status: 400 }
-      );
+    if (!audioBase64) {
+      return NextResponse.json({ error: "No audio data provided." }, { status: 400 });
     }
 
-    // Server-side validation of size to prevent DOS (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: "The selected file exceeds the maximum allowed size of 5MB." },
-        { status: 400 }
-      );
+    // 1. Pre-flight server-side duration verification (30s to 45s constraint)
+    if (typeof duration === "number" && !isNaN(duration)) {
+      if (duration < 30 || duration > 45) {
+        return NextResponse.json(
+          {
+            error: `Audio duration must be between 30 and 45 seconds. (Provided: ${duration}s)`,
+            durationSeconds: duration
+          },
+          { status: 400 }
+        );
+      }
     }
 
-    // Convert file to buffer and base64 for inlineData
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64Audio = buffer.toString("base64");
-    
-    // Determine the proper MIME type and strip parameters (e.g. "audio/webm;codecs=opus" -> "audio/webm")
-    let mimeType = file.type || "audio/webm";
+    // Strip base64 headers if present
+    let cleanBase64 = audioBase64;
+    if (audioBase64.includes(";base64,")) {
+      const parts = audioBase64.split(";base64,");
+      const mimePart = parts[0].replace("data:", "").trim();
+      if (mimePart) {
+        mimeType = mimePart;
+      }
+      cleanBase64 = parts[1];
+    }
     if (mimeType.includes(";")) {
       mimeType = mimeType.split(";")[0].trim();
     }
@@ -188,7 +215,7 @@ export async function POST(req: NextRequest) {
       mimeType = "audio/mp3";
     }
 
-    // Initialize client and run content generation with robust transient retries
+    // Initialize client and run content generation with transient retries
     const ai = getAiClient();
 
     const response = await generateContentWithRetry(ai, {
@@ -196,19 +223,19 @@ export async function POST(req: NextRequest) {
       contents: [
         {
           inlineData: {
-            data: base64Audio,
+            data: cleanBase64,
             mimeType: mimeType,
           }
         },
         {
-          text: "Analyze this spoken English recording. Transcribe the spoken text, evaluate the pronunciation of each word sequentially, and rate clarity, fluency, and pacing according to the structured instructions."
+          text: "Analyze this spoken recording. Transcribe exactly, score overall phonetic accuracy, clarity, fluency, pacing, and stress (0-100), and evaluate each word sequentially with diagnostic feedback."
         }
       ],
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: PronunciationSchema,
-        temperature: 0.2, // Lower temperature for more factual phonetic feedback
+        temperature: 0.2,
       }
     });
 
@@ -220,7 +247,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Clean markdown code blocks if the model wrapped the JSON output
     let cleanedText = responseText.trim();
     if (cleanedText.startsWith("```")) {
       cleanedText = cleanedText.replace(/^```(?:json)?\n?/i, "");
@@ -228,75 +254,62 @@ export async function POST(req: NextRequest) {
       cleanedText = cleanedText.trim();
     }
 
-    const rawData = JSON.parse(cleanedText);
+    const parsedResult = JSON.parse(cleanedText);
 
-    // Validate and robustly fall back on any missing schema properties
-    const detectedDuration = typeof rawData.metadata?.durationSeconds === "number" ? rawData.metadata.durationSeconds : 35;
-    const validatedData = {
-      overallScore: typeof rawData.overallScore === "number" ? rawData.overallScore : 75,
-      scoresBreakdown: {
-        clarity: typeof rawData.scoresBreakdown?.clarity === "number" ? rawData.scoresBreakdown.clarity : 75,
-        fluency: typeof rawData.scoresBreakdown?.fluency === "number" ? rawData.scoresBreakdown.fluency : 75,
-        pacing: typeof rawData.scoresBreakdown?.pacing === "number" ? rawData.scoresBreakdown.pacing : 75,
+    // 2. Server-side verification: English speech only constraint
+    const detectedLang = (parsedResult.detectedLanguage || "").toLowerCase();
+    if (detectedLang && !detectedLang.includes("eng") && !detectedLang.includes("en-")) {
+      return NextResponse.json(
+        { error: `Only English speech is currently supported. (Detected language: ${parsedResult.detectedLanguage || "Non-English"})` },
+        { status: 400 }
+      );
+    }
+
+    const session = {
+      id: "sess_" + Math.random().toString(36).substring(2, 11),
+      timestamp: new Date().toISOString(),
+      duration: typeof duration === "number" && !isNaN(duration) ? duration : 35,
+      fileName,
+      overallScore: typeof parsedResult.overallScore === "number" ? parsedResult.overallScore : 75,
+      clarity: typeof parsedResult.clarity === "number" ? parsedResult.clarity : 75,
+      fluency: typeof parsedResult.fluency === "number" ? parsedResult.fluency : 75,
+      pacing: typeof parsedResult.pacing === "number" ? parsedResult.pacing : 75,
+      stress: typeof parsedResult.stress === "number" ? parsedResult.stress : 75,
+      transcript: parsedResult.transcript || "",
+      feedback: {
+        words: Array.isArray(parsedResult.feedback?.words)
+          ? parsedResult.feedback.words.map((w: any) => ({
+              word: typeof w?.word === "string" ? w.word : "",
+              score: typeof w?.score === "number" ? w.score : 85,
+              phonemes: typeof w?.phonemes === "string" ? w.phonemes : undefined,
+              errorType: typeof w?.errorType === "string" ? w.errorType : "none",
+              explanation: typeof w?.explanation === "string" ? w.explanation : undefined,
+              actionableAdvice: typeof w?.actionableAdvice === "string" ? w.actionableAdvice : undefined,
+            }))
+          : [],
+        generalAdvice: parsedResult.feedback?.generalAdvice || "Clear speech with minor areas for articulation polish.",
+        intelligibilityExplanation: parsedResult.feedback?.intelligibilityExplanation || "Speech is understandable across standard conversational contexts.",
+        keyStrengths: Array.isArray(parsedResult.feedback?.keyStrengths) && parsedResult.feedback.keyStrengths.length > 0
+          ? parsedResult.feedback.keyStrengths
+          : ["Good baseline intelligibility and natural cadence."],
+        focusAreas: Array.isArray(parsedResult.feedback?.focusAreas) && parsedResult.feedback.focusAreas.length > 0
+          ? parsedResult.feedback.focusAreas
+          : ["Focus on clear consonant releases and steady rhythm."],
       },
-      transcriptWords: Array.isArray(rawData.transcriptWords)
-        ? rawData.transcriptWords.map((w: any) => ({
-            word: typeof w?.word === "string" ? w.word : "",
-            isCorrect: typeof w?.isCorrect === "boolean" ? w.isCorrect : true,
-            expectedPhonetic: typeof w?.expectedPhonetic === "string" ? w.expectedPhonetic : undefined,
-            errorExplanation: typeof w?.errorExplanation === "string" ? w.errorExplanation : undefined,
-            improvementDrill: typeof w?.improvementDrill === "string" ? w.improvementDrill : undefined,
-          }))
-        : [],
-      generalRecommendations: Array.isArray(rawData.generalRecommendations)
-        ? rawData.generalRecommendations.map((r: any) => ({
-            title: typeof r?.title === "string" ? r.title : "Practice General Phonetics",
-            problemDescription: typeof r?.problemDescription === "string" ? r.problemDescription : "Minor acoustic deviations detected.",
-            exerciseInstructions: typeof r?.exerciseInstructions === "string" ? r.exerciseInstructions : "Practice pronouncing word endings and maintaining a steady rhythm.",
-          }))
-        : [],
-      metadata: {
-        durationSeconds: detectedDuration,
-        detectedLanguage: typeof rawData.metadata?.detectedLanguage === "string" ? rawData.metadata.detectedLanguage : "English",
-        totalWords: typeof rawData.metadata?.totalWords === "number" ? rawData.metadata.totalWords : 0,
-        unclearWordsCount: typeof rawData.metadata?.unclearWordsCount === "number" ? rawData.metadata.unclearWordsCount : 0,
-      }
     };
 
-    // Server-side validation of duration on the resulting AI parsed payload (30s to 45s constraint)
-    if (detectedDuration < 30 || detectedDuration > 45) {
-      return NextResponse.json(
-        {
-          error: "Upload an audio file between 30 and 45 seconds.",
-          durationSeconds: detectedDuration
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if the detected language is English
-    const detectedLang = validatedData.metadata.detectedLanguage.toLowerCase();
-    if (detectedLang && !detectedLang.includes("eng")) {
-      return NextResponse.json(
-        { error: "Only English speech is currently supported." },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(validatedData);
+    return NextResponse.json({ session, ...session });
 
   } catch (error: any) {
     console.error("Audio analysis API error:", error);
     
-    // Check if it's an API Key configuration error
     if (error?.message && error.message.includes("GEMINI_API_KEY")) {
       return NextResponse.json(
-        { error: "The server's Gemini API Key is not configured. Please set the GEMINI_API_KEY environment variable in the Settings menu." },
+        { error: "The server's Gemini API Key is not configured. Please set the GEMINI_API_KEY environment variable." },
         { status: 501 }
       );
     }
 
-    // Produce safe, helpful, standardized errors with clear underlying diagnostics
     let userFriendlyError = "The audio could not be processed. Try another recording.";
     const errMsg = error?.message || "";
     
@@ -312,7 +325,6 @@ export async function POST(req: NextRequest) {
       userFriendlyError = "The pronunciation analysis response could not be parsed. Please try recording again with clear speech.";
     }
 
-    // Append underlying error message for clear engineering diagnosis
     const finalError = `${userFriendlyError} (Details: ${errMsg})`;
 
     return NextResponse.json(
@@ -321,3 +333,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
