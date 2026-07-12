@@ -1,0 +1,10 @@
+{
+  "name": "Livo AI Pronunciation Audit",
+  "description": "India DPDP 2023 compliant English voice pronunciation assessment tool with side-by-side comparison.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
