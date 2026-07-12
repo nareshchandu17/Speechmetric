@@ -27,10 +27,11 @@ The application uses an event-driven, single-page full-stack architecture. To ma
 │                    NEXT.JS EDGE/SERVER (API PROXY)                     │
 │                                                                        │
 │  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │  POST /api/analyze-audio                                         │  │
-│  │  1. Multipart Form/File Parsing                                  │  │
-│  │  2. Double-Guard Validations (Consent, Format, 5MB Limit)        │  │
+│  │  POST /api/analyze-audio (and unified /api/analyze alias)        │  │
+│  │  1. Multipart Form/File or JSON Base64 Stream Parsing            │  │
+│  │  2. Pre-flight Checks (30s-45s duration, Consent, Size Limit)    │  │
 │  │  3. Convert to Base64 & Construct Multimodal Gemini API Payload  │  │
+│  │  4. Post-inference Verification (English speech only check)      │  │
 │  └───────────────────────────────────┬──────────────────────────────┘  │
 └──────────────────────────────────────┼─────────────────────────────────┘
                                        │ (Secure HTTPS, Server Secrets Hidden)
@@ -40,22 +41,22 @@ The application uses an event-driven, single-page full-stack architecture. To ma
 │                                                                        │
 │  Model: gemini-3.5-flash                                               │
 │  Inputs: Audio binary data + Applied Phonetics system instruction      │
-│  Outputs: Structured JSON parsing (PronunciationSchema)                │
+│  Outputs: Structured JSON parsing (PronunciationSchema -> SavedSession)│
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Breakdown
 1. **Frontend Client (React/Next.js Client Components):**
    - **Audio Capture Module:** Supports direct recording via the browser's MediaRecorder API (capturing in WebM/Ogg/WAV depending on OS compatibility) or file uploads (drag-and-drop or custom selector).
-   - **Duration Guard:** Restricts audio capture to between 30 and 45 seconds before transmission.
-   - **Interactive Report View:** Displays an interactive word-by-word transcript with color-coded clarity scoring, error explanation cards, performance gauges, and phonetic drill components.
+   - **Duration Guard:** Restricts audio capture to strictly between 30 and 45 seconds before transmission (`IngestCard.tsx`).
+   - **Interactive Report View:** Displays an interactive word-by-word transcript with color-coded clarity scoring (`DiagnosticDashboard.tsx`), error explanation cards, performance gauges (`ScoreTrendChart.tsx`), and phonetic drill components.
    - **Speech Synthesis:** Uses Web Speech API TTS to let the user "Listen to tips" directly inside the browser.
-2. **Backend API Route (`/api/analyze-audio`):**
-   - Acts as a secure, server-side proxy to keep `GEMINI_API_KEY` safe.
-   - Re-validates user consent, file sizes (max 5MB limit), and file headers.
-   - Directs the base64 audio stream to the Google Gemini API with strict system instructions and structured JSON response schemas.
+2. **Backend API Route (`/api/analyze-audio` and unified `/api/analyze` proxy):**
+   - Acts as a secure, server-side proxy to keep `GEMINI_API_KEY` safe and enforce statutory pre-flight constraints.
+   - Re-validates user consent (`consentGiven`), audio duration (`30s to 45s`), and file sizes before invoking AI models.
+   - Directs the base64 audio stream to the Google Gemini API (`gemini-3.5-flash`) with transient exponential backoff retries and verifies that the speech is strictly in English (`detectedLanguage` check).
 3. **AI Reasoning Engine (Google Gemini API):**
-   - Utilizes `gemini-3.5-flash` to process raw audio waveforms directly, bypassing transcription bottlenecks and dual-model alignment errors.
+   - Utilizes `gemini-3.5-flash` to process raw audio waveforms directly, bypassing transcription bottlenecks and dual-model alignment errors, outputting directly to `SavedSession` structure.
 
 ---
 
@@ -71,8 +72,8 @@ The core pipeline evaluates acoustic patterns and returns structured linguistic 
 
 ### Why Gemini-3.5-Flash is the Optimal Choice
 Using a single, natively multimodal model provides:
-1. ** Waveform Analysis:** Gemini analyzes the voice recording's wave data directly. It hears pacing, pauses, and phoneme omissions (e.g., skipping final unvoiced stops like `/t/` in `"worked"`).
-2. **Latency & Response Optimization:** To prevent server timeouts in the serverless environment, we optimized the output schema to completely omit optional fields (like phonetic helpers and error details) for correct words. This reduces the token volume by up to **80%**, accelerating generation to just a few seconds.
+1. **Waveform Analysis:** Gemini analyzes the voice recording's wave data directly. It hears pacing, pauses, and phoneme omissions (e.g., skipping final unvoiced stops like `/t/` in `"worked"`).
+2. **Structured Coaching Delivery:** Returns exact numerical ratings for Clarity, Fluency, Pacing, and Stress, paired with word-level phonetic breakdowns (`phonemes`, `errorType`, `actionableAdvice`).
 
 ---
 
@@ -87,9 +88,9 @@ Scoring is structured across three core dimensions (0–100 scale), which are ag
 *   **Pacing (Tempo & Stress):** Audits words per minute (normal range: 110-150 WPM) and syllable stress rhythm.
 
 ### Deciding What to Highlight
-*   Gemini returns a flat list of `transcriptWords` conforming to `PronunciationSchema`.
-*   Each word has an `isCorrect` boolean. Words with `isCorrect: false` represent mispronunciations, omissions, or slurred delivery.
-*   **Interactive UI Mapping:** The client-side renders a full text transcript where incorrect words are highlighted in an eye-safe, high-contrast amber/yellow underline. Clicking on a highlighted word opens a tailored drawer or sidecard showing:
+*   Gemini returns a flat list of `words` conforming to `PronunciationSchema`.
+*   Each word has an `score` integer and `errorType`. Words with lower scores represent mispronunciations, omissions, or slurred delivery.
+*   **Interactive UI Mapping:** The client-side renders a full text transcript where incorrect words are highlighted in high-contrast underlines (`< 60` rose wavy underline, `60–84` amber solid underline). Clicking on a highlighted word opens a tailored drawer or sidecard showing:
     1.  **Expected Phonetic Representation:** Standard IPA helper (e.g., `/wɜːkt/`).
     2.  **Linguistic Error Explanation:** Explain what went wrong (e.g., *"The ending consonant /t/ was omitted"*).
     3.  **Physical Drill Tip:** Concrete physical mechanics guidance (e.g., *"Practice releasing the final /t/ sound with a sudden burst of air"*).
@@ -105,7 +106,7 @@ Since speech audio constitutes sensitive personal voice data, we built the appli
 3.  **Data Minimization & Storage Limitation (Section 8 - Data Erasure):**
     *   **Zero Server Storage:** The backend has no database and no Cloud Storage bucket. Audio files are processed purely in-memory, sent over an encrypted HTTPS connection to Gemini, and instantly discarded.
     *   **Local-Only History:** Report history is disabled by default. If a user chooses to opt-in, histories are stored **exclusively in the browser’s `localStorage`**. No user personal data or transcripts reside on the server.
-    *   **Instant Erasure:** Users can click **"Clear Local History"** or uncheck history opt-in at any time, which instantly deletes all transcripts and scores from local storage.
+    *   **Instant Erasure:** Users can click the interactive **"Erase All Local Assessments"** button inside `HistoryCard.tsx` or uncheck history opt-in at any time, which instantly purges all transcripts and scores from local storage under Section 12 right to erasure.
 4.  **Security Safeguards (Section 8):** Data is transmitted over TLS/HTTPS with strict header configurations. There are no client-side API keys exposed; all AI calls are proxied securely server-side.
 5.  **Data Residency & Cross-Border Processing:** The application explicitly notifies users that the secure Google Gemini API is utilized for processing, ensuring complete transparency regarding third-party processors.
 
