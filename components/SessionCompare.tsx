@@ -25,20 +25,21 @@ export function SessionCompare({ sessionA, sessionB, onClose }: SessionComparePr
   ];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-6" id="session-compare">
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs space-y-6" id="session-compare">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-slate-900 text-white rounded-xl">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-slate-900 text-white rounded-xl shrink-0">
             <ArrowLeftRight className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-lg font-bold tracking-tight text-slate-900">session comparison</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Comparing older vs. newer session progress</p>
+            <h3 className="text-base font-bold tracking-tight text-slate-900">Session Comparison</h3>
+            <p className="text-xs text-slate-500 mt-1 leading-normal">Comparing older vs. newer session progress</p>
           </div>
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="text-xs font-semibold text-slate-500 hover:text-slate-950 underline transition-all duration-150 cursor-pointer active:scale-95"
+          className="text-xs font-semibold text-slate-500 hover:text-slate-950 underline transition-all duration-150 cursor-pointer active:scale-95 focus:outline-none"
         >
           Clear Selection
         </button>
@@ -47,14 +48,14 @@ export function SessionCompare({ sessionA, sessionB, onClose }: SessionComparePr
       {/* Side by Side Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Older Session */}
-        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/60 relative">
-          <span className="absolute top-3 right-3 text-[10px] font-mono font-bold text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-200">
+        <div className="p-4 rounded-xl bg-slate-50/60 border border-slate-200/60 relative">
+          <span className="absolute top-3 right-3 text-[10px] font-mono font-medium text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200/80 shadow-2xs">
             OLDER BASELINE
           </span>
-          <p className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider truncate max-w-[150px]">
+          <p className="text-xs font-mono font-semibold text-slate-500 uppercase tracking-wider truncate max-w-[150px]">
             {older.fileName}
           </p>
-          <p className="text-3xl font-extrabold text-slate-800 tracking-tight font-mono mt-1">
+          <p className="text-3xl font-bold text-slate-800 tracking-tight font-mono mt-1">
             {older.overallScore}%
           </p>
           <p className="text-xs text-slate-500 mt-1">
@@ -68,17 +69,17 @@ export function SessionCompare({ sessionA, sessionB, onClose }: SessionComparePr
         </div>
 
         {/* Newer Session */}
-        <div className="p-4 rounded-xl bg-emerald-50/40 border border-emerald-100 relative">
-          <span className="absolute top-3 right-3 text-[10px] font-mono font-bold text-emerald-600 bg-white px-2 py-0.5 rounded border border-emerald-200">
+        <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/60 relative">
+          <span className="absolute top-3 right-3 text-[10px] font-mono font-medium text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200/80 shadow-2xs">
             NEWER PROGRESS
           </span>
-          <p className="text-xs font-mono font-bold text-emerald-600 uppercase tracking-wider truncate max-w-[150px]">
+          <p className="text-xs font-mono font-semibold text-emerald-700 uppercase tracking-wider truncate max-w-[150px]">
             {newer.fileName}
           </p>
-          <p className="text-3xl font-extrabold text-emerald-800 tracking-tight font-mono mt-1">
+          <p className="text-3xl font-bold text-emerald-800 tracking-tight font-mono mt-1">
             {newer.overallScore}%
           </p>
-          <p className="text-xs text-emerald-600/80 mt-1">
+          <p className="text-xs text-emerald-700/80 mt-1">
             Assessed {new Date(newer.timestamp).toLocaleDateString("en-IN", {
               month: "short",
               day: "numeric",
@@ -90,9 +91,9 @@ export function SessionCompare({ sessionA, sessionB, onClose }: SessionComparePr
       </div>
 
       {/* Metric Delta Grid */}
-      <div className="space-y-3.5 pt-2">
-        <h4 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider">
-          metric breakdowns
+      <div className="space-y-4 pt-2">
+        <h4 className="text-xs font-semibold font-mono text-slate-500 uppercase tracking-wider">
+          Metric Breakdowns
         </h4>
         <div className="space-y-3">
           {metrics.map((m) => {
@@ -103,24 +104,24 @@ export function SessionCompare({ sessionA, sessionB, onClose }: SessionComparePr
             return (
               <div key={m.key} className="border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-semibold text-slate-700">{m.label}</span>
+                  <span className="font-medium text-slate-700">{m.label}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono text-slate-500">
-                      {olderVal}% → <strong className="text-slate-800">{newerVal}%</strong>
+                      {olderVal}% → <strong className="text-slate-800 font-semibold">{newerVal}%</strong>
                     </span>
                     {diff > 0 ? (
-                      <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono text-xs font-bold flex items-center gap-0.5">
-                        <TrendingUp className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-mono text-[11px] font-medium border border-emerald-200/60">
+                        <TrendingUp className="w-3 h-3 shrink-0" />
                         +{diff}
                       </span>
                     ) : diff < 0 ? (
-                      <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-700 font-mono text-xs font-bold flex items-center gap-0.5">
-                        <TrendingDown className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-mono text-[11px] font-medium border border-rose-200/60">
+                        <TrendingDown className="w-3 h-3 shrink-0" />
                         {diff}
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-xs font-semibold flex items-center gap-0.5">
-                        <Minus className="w-3 h-3" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-mono text-[11px] font-medium border border-slate-200/60">
+                        <Minus className="w-3 h-3 shrink-0" />
                         0
                       </span>
                     )}

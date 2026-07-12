@@ -27,18 +27,18 @@ export function ScoreTrendChart({ history }: ScoreTrendChartProps) {
   const delta = latestScore - initialScore;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm flex flex-col space-y-4" id="score-trend-chart">
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs flex flex-col justify-between space-y-4 h-full" id="score-trend-chart">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-bold tracking-tight text-slate-900">progress timeline</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Assessment score progression over time</p>
+          <h3 className="text-base font-bold tracking-tight text-slate-900">Progress Timeline</h3>
+          <p className="text-xs text-slate-500 mt-1 leading-normal">Assessment score progression over time</p>
         </div>
         {delta !== 0 && (
-          <div className={`px-2.5 py-1 rounded-lg text-xs font-semibold font-mono flex items-center gap-1 ${
-            delta > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-mono font-medium border ${
+            delta > 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200/60" : "bg-rose-50 text-rose-700 border-rose-200/60"
           }`}>
-            <TrendingUp className="w-3.5 h-3.5" />
-            {delta > 0 ? `+${delta}` : delta} net
+            <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+            <span>{delta > 0 ? `+${delta}` : delta} net</span>
           </div>
         )}
       </div>
