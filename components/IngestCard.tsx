@@ -208,7 +208,7 @@ export function IngestCard({
       reader.onloadend = async () => {
         const base64Data = reader.result as string;
         
-        const response = await fetch("/api/analyze", {
+        const response = await fetch("/api/analyze-audio", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -244,10 +244,10 @@ export function IngestCard({
   const strokeDashoffset = strokeDasharray - (strokeDasharray * Math.min(currentDuration, 45)) / 45;
 
   return (
-    <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-slate-200/60 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col space-y-6" id="ingest-card">
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-2xs flex flex-col space-y-6" id="ingest-card">
       
       {/* Tab Selectors */}
-      <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl">
+      <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-xl">
         <button
           type="button"
           onClick={() => {
@@ -257,13 +257,13 @@ export function IngestCard({
             }
           }}
           disabled={isRecording || analyzing}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 text-xs font-semibold rounded-lg transition-all duration-150 cursor-pointer focus:outline-none ${
             activeTab === "microphone"
-              ? "bg-white text-blue-600 shadow-sm"
+              ? "bg-white text-blue-600 shadow-2xs"
               : "text-slate-500 hover:text-slate-800"
           }`}
         >
-          <Mic className="w-3.5 h-3.5" />
+          <Mic className="w-3.5 h-3.5 shrink-0" />
           Microphone
         </button>
         <button
@@ -275,20 +275,20 @@ export function IngestCard({
             }
           }}
           disabled={isRecording || analyzing}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-bold rounded-xl transition-all duration-200 cursor-pointer ${
+          className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 text-xs font-semibold rounded-lg transition-all duration-150 cursor-pointer focus:outline-none ${
             activeTab === "upload"
-              ? "bg-white text-blue-600 shadow-sm"
+              ? "bg-white text-blue-600 shadow-2xs"
               : "text-slate-500 hover:text-slate-800"
           }`}
         >
-          <UploadCloud className="w-3.5 h-3.5" />
+          <UploadCloud className="w-3.5 h-3.5 shrink-0" />
           Upload Audio
         </button>
       </div>
 
       {/* Recording Waveform Overlay when recording */}
       {isRecording && (
-        <div className="h-12 bg-slate-50/50 rounded-xl overflow-hidden border border-slate-100">
+        <div className="h-16 bg-slate-50/60 rounded-xl overflow-hidden border border-slate-200/60">
           <WaveformVisualizer mediaStream={mediaStream} isRecording={isRecording} />
         </div>
       )}
@@ -328,15 +328,15 @@ export function IngestCard({
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
               disabled={analyzing}
-              className={`w-24 h-24 rounded-full flex flex-col items-center justify-center transition-all duration-200 shadow-md border cursor-pointer z-10 relative ${
+              className={`w-24 h-24 rounded-full flex flex-col items-center justify-center transition-all duration-150 shadow-sm border cursor-pointer z-10 relative focus:outline-none ${
                 isRecording
-                  ? "bg-red-50 border-red-200 text-red-500 animate-pulse hover:bg-red-100/80"
+                  ? "bg-rose-50 border-rose-200 text-rose-600 animate-pulse hover:bg-rose-100/80"
                   : selectedFile
                   ? "bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100/80"
                   : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
               }`}
             >
-              <Mic className={`w-8 h-8 ${isRecording ? "scale-110" : ""}`} />
+              <Mic className={`w-8 h-8 transition-transform duration-150 ${isRecording ? "scale-110" : ""}`} />
               <span className="text-[10px] font-bold uppercase tracking-wider mt-1.5 font-mono">
                 {isRecording ? "Tap Stop" : selectedFile ? "Retake" : "Tap Rec"}
               </span>
@@ -344,10 +344,10 @@ export function IngestCard({
           </div>
 
           {/* Record Duration Timer */}
-          <div className="text-center space-y-0.5">
-            <p className="text-[10px] font-mono tracking-widest text-slate-400 font-bold uppercase">vocal recording</p>
-            <p className="text-2xl font-black text-slate-800 tracking-tight font-mono">
-              0:{currentDuration < 10 ? `0${currentDuration}` : currentDuration} <span className="text-sm font-normal text-slate-400">/ 0:45</span>
+          <div className="text-center space-y-1">
+            <p className="text-[11px] font-mono tracking-wider text-slate-400 font-semibold uppercase">vocal recording</p>
+            <p className="text-2xl font-bold text-slate-800 tracking-tight font-mono">
+              0:{currentDuration < 10 ? `0${currentDuration}` : currentDuration} <span className="text-sm font-medium text-slate-400">/ 0:45</span>
             </p>
           </div>
 
@@ -364,7 +364,7 @@ export function IngestCard({
                   currentDuration >= 30 && currentDuration <= 45
                     ? "bg-emerald-500"
                     : isRecording
-                    ? "bg-red-500"
+                    ? "bg-rose-500"
                     : "bg-blue-500"
                 }`}
               ></div>
@@ -374,10 +374,10 @@ export function IngestCard({
             </div>
 
             {/* Scale Ticks Labels */}
-            <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 font-mono">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 font-mono">
               <span>0s</span>
-              <span className="text-emerald-600 flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
+              <span className="text-emerald-600 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                 Min 30s
               </span>
               <span>Max 45s</span>
@@ -386,9 +386,9 @@ export function IngestCard({
 
           {/* Success Check Banner */}
           {selectedFile && !isRecording && (
-            <div className="w-full p-3 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2.5 text-emerald-800 font-bold text-xs shadow-sm">
-              <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px]">✓</span>
-              Voice sample recorded successfully!
+            <div className="w-full p-3.5 bg-emerald-50 border border-emerald-200/60 rounded-xl flex items-center gap-2.5 text-emerald-800 font-semibold text-xs shadow-2xs">
+              <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shrink-0">✓</span>
+              <span>Voice sample recorded successfully!</span>
             </div>
           )}
 
@@ -405,10 +405,10 @@ export function IngestCard({
               onDragLeave={handleDrag}
               onDrop={handleDrop}
               onClick={() => document.getElementById("file-input")?.click()}
-              className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer min-h-[180px] transition-all duration-150 active:scale-[0.99] ${
+              className={`border border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer min-h-[180px] transition-all duration-150 active:scale-[0.99] ${
                 dragActive
-                  ? "border-blue-500 bg-blue-50/20"
-                  : "border-slate-200 hover:border-blue-400 bg-slate-50/50"
+                  ? "border-blue-500 bg-blue-50/30"
+                  : "border-slate-200/80 hover:border-slate-400 bg-slate-50/60"
               }`}
             >
               <input
@@ -418,25 +418,25 @@ export function IngestCard({
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <UploadCloud className="w-10 h-10 text-blue-500 mb-3" />
-              <p className="text-sm font-bold text-slate-800">
-                Drag & drop audio here, or click to browse
+              <UploadCloud className="w-10 h-10 text-blue-600 mb-3 stroke-[1.5]" />
+              <p className="text-sm font-semibold text-slate-800">
+                Drag &amp; drop audio here, or click to browse
               </p>
               <p className="text-xs text-slate-400 mt-1">
                 WAV, MP3, M4A or WEBM up to 32MB (30s – 45s)
               </p>
             </div>
           ) : (
-            <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 truncate">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg shrink-0 border border-blue-100">
                   <FileCheck className="w-5 h-5" />
                 </div>
                 <div className="truncate">
-                  <p className="text-xs font-bold text-slate-800 truncate max-w-[160px]">
+                  <p className="text-xs font-semibold text-slate-800 truncate max-w-[180px]">
                     {selectedFile.name}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-mono">
                     Duration: <strong className="text-slate-700">{fileDuration}s</strong>
                   </p>
                 </div>
@@ -448,7 +448,7 @@ export function IngestCard({
                   setFileDuration(null);
                   setValidationError(null);
                 }}
-                className="text-xs font-bold text-red-600 hover:text-red-700 transition-all cursor-pointer active:scale-95 px-2 py-1 hover:bg-red-50 rounded-lg"
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition-all duration-150 cursor-pointer active:scale-95 px-2.5 py-1.5 hover:bg-rose-50 rounded-lg focus:outline-none shrink-0"
               >
                 Remove
               </button>
@@ -457,9 +457,9 @@ export function IngestCard({
 
           {/* Success Check Banner */}
           {selectedFile && (
-            <div className="w-full p-3 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2.5 text-emerald-800 font-bold text-xs shadow-sm">
-              <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px]">✓</span>
-              Audio uploaded successfully!
+            <div className="w-full p-3.5 bg-emerald-50 border border-emerald-200/60 rounded-xl flex items-center gap-2.5 text-emerald-800 font-semibold text-xs shadow-2xs">
+              <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-[9px] shrink-0">✓</span>
+              <span>Audio uploaded successfully!</span>
             </div>
           )}
         </div>
@@ -467,9 +467,9 @@ export function IngestCard({
 
       {/* Validation or backend error banner */}
       {validationError && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-red-700 shadow-sm animate-shake">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span className="text-xs font-bold leading-normal">{validationError}</span>
+        <div className="p-3.5 bg-rose-50 border border-rose-200/80 rounded-xl flex items-start gap-2.5 text-rose-800 shadow-2xs">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-rose-600" />
+          <span className="text-xs font-semibold leading-normal">{validationError}</span>
         </div>
       )}
 
@@ -477,27 +477,27 @@ export function IngestCard({
       {selectedFile && !analyzing && (
         <button
           onClick={runAnalysis}
-          className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer active:scale-[0.98]"
+          className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold text-sm tracking-tight flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all duration-150 cursor-pointer active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="w-4 h-4 shrink-0" />
           Analyze Pronunciation
         </button>
       )}
 
       {/* Live progress indicator */}
       {analyzing && (
-        <div className="p-4 bg-blue-50/40 border border-blue-100/50 rounded-2xl space-y-3">
+        <div className="p-4 bg-blue-50/50 border border-blue-200/60 rounded-xl space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono text-blue-600 font-bold uppercase tracking-wider">
+            <span className="text-[11px] font-mono text-blue-700 font-semibold uppercase tracking-wider">
               AI Speech Engine
             </span>
-            <span className="text-xs text-blue-600 font-bold flex items-center gap-1">
-              <RefreshCw className="w-3 h-3 animate-spin" />
+            <span className="text-xs text-blue-700 font-semibold flex items-center gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
               Processing
             </span>
           </div>
           <div className="space-y-1.5">
-            <p className="text-xs font-bold text-slate-800">
+            <p className="text-xs font-semibold text-slate-800">
               {currentStage}
             </p>
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">

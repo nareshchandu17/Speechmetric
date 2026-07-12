@@ -14,7 +14,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: "Livo AI - English Pronunciation Assessment",
+  title: "SpeechMetric - English Pronunciation Assessment",
   description: "Durable and reliable AI-powered English pronunciation analysis tool.",
 };
 
